@@ -664,6 +664,11 @@ bool ensureFrameSprite() {
     return true;
   }
   s_frame.setColorDepth(16);
+#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
+  // 360x360x16bpp = ~253 KB — too big to allocate reliably from internal
+  // DRAM alongside the WiFi/TLS stack, so put it in the WROVER's PSRAM.
+  s_frame.setPsram(true);
+#endif
   if (!s_frame.createSprite(radar::kSize, radar::kSize)) {
     Serial.println("radar: frame sprite alloc failed");
     return false;
