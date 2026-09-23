@@ -270,6 +270,62 @@ pio run -e psram-check -t upload -t monitor
 pio run -e radar-sim-gc9b72-psram -t upload -t monitor
 ```
 
+### Troubleshooting (real gotchas from bringing this up)
+
+Everything below actually happened while bringing up this variant — not
+hypothetical.
+
+**Board sold as "WROVER" that isn't one**
+*Symptom:* `psram-check` reports no PSRAM, or the full radar app spams
+`radar: frame sprite alloc failed` — even though the silkscreen says
+"ESP32-WROVER" or the listing offered a WROVER option.
+*Cause:* some sellers ship whichever module they have in stock for a
+generic "ESP32 DevKitC (WROOM-32D / WROOM-32U / WROVER)" listing,
+regardless of which variant you picked.
+*Fix:* flash `psram-check` **before** wiring anything else up — it's the
+only way to know for sure. No PSRAM means the board is functionally a
+WROOM: fine for `wroom-gc9b72-test` / the non-`-psram` sim, not for the
+full double-buffered radar app.
+
+**Uploads fail with "Failed to communicate with the flash chip" (but `flash_id` works)**
+*Symptom:* `esptool.py flash_id` succeeds every time (chip reads fine),
+but `pio run -t upload` reproducibly fails partway through with a
+flash-write error.
+*Cause:* a USB cable that can't sustain the higher current draw of a
+flash erase/write cycle — reads are cheap, writes/erases aren't.
+Charge-only or very thin cables are the usual suspect; this hit us twice
+in one session, on two different boards.
+*Fix:* swap the cable. If `ls /dev/cu.*` (macOS) never shows a
+`usbserial-*` / `SLAB_USBtoUART*` device at all when you plug in, that's
+the same root cause failing even earlier (no data lines at all, not just
+insufficient current for writes).
+
+**Boot loop with `flash read err` after a failed upload**
+*Symptom:* the board resets continuously; serial fills with
+`rst:0x10 (RTCWDT_RTC_RESET), boot:0x33 (SPI_FAST_FLASH_BOOT),
+flash read err, 1000`.
+*Cause:* a partial/corrupted flash image left over from an upload that
+failed mid-write (see above).
+*Fix:* `esptool.py --port <port> erase_flash`, then reflash normally.
+This also wipes NVS (saved WiFi/location), so you'll go through WiFi
+setup again afterwards.
+
+**A serial-monitoring script silently wipes your saved WiFi**
+*Symptom:* WiFi credentials and location vanish (device boots straight
+into the `PlaneRadar-Setup` portal) even though nobody touched BOOT.
+*Cause:* BOOT is wired to GPIO0 on essentially every ESP32 dev board.
+Some ad-hoc serial tools/scripts assert DTR when opening the port as
+part of the standard auto-reset dance; if DTR happens to hold GPIO0 low
+for ≥3 s (`kBootResetHoldMs`) while the port stays open, the firmware
+reads that as a long BOOT press and runs the credential-reset path
+(`wifiResetCredentialsAndReboot()`) — indistinguishable from actually
+holding the button.
+*Fix:* `pio device monitor` handles this correctly. A custom script
+should explicitly set `dtr=False` / `rts=False` before/at open — though
+this isn't fully reliable across every CP2102/CH340 driver combination,
+so treat any ad-hoc serial-reading tool as a WiFi-reset risk on this
+hardware, and prefer just watching the physical screen when you can.
+
 ### Range preset from the Wi‑Fi portal
 
 The same live portal described above (`plane-radar.local`, no Wi‑Fi reset
