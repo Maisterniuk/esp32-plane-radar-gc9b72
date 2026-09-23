@@ -85,6 +85,32 @@ char s_runways_checkbox_attrs[32] = "type=\"checkbox\"";
 WiFiManagerParameter s_param_runways("show_runways", "Show airport runways", "T", 2,
                                      s_runways_checkbox_attrs, WFM_LABEL_AFTER);
 
+// WiFiManagerParameter has no built-in <select>, so this is raw custom HTML
+// (the "custom" constructor below just stores the pointer — rebuilding this
+// buffer in refreshPortalParamDefaults() before each render keeps the
+// "selected" option in sync with the live range preset).
+constexpr size_t kRangeSelectHtmlLen = 640;
+char s_range_select_html[kRangeSelectHtmlLen] = "";
+WiFiManagerParameter s_param_range(s_range_select_html);
+
+void buildRangeSelectHtml() {
+  const uint8_t current = ui::radar::rangeIndex();
+  int off = snprintf(s_range_select_html, kRangeSelectHtmlLen,
+                     "<label for=\"radar_range\">Default range</label><br/>"
+                     "<select id=\"radar_range\" name=\"radar_range\">");
+  for (size_t i = 0; i < ui::radar::kRangePresetCount && off > 0 &&
+                     static_cast<size_t>(off) < kRangeSelectHtmlLen;
+       ++i) {
+    off += snprintf(s_range_select_html + off, kRangeSelectHtmlLen - off,
+                    "<option value=\"%u\"%s>%.0f km</option>",
+                    static_cast<unsigned>(i), (i == current) ? " selected" : "",
+                    ui::radar::kRangePresets[i].ring3_km);
+  }
+  if (off > 0 && static_cast<size_t>(off) < kRangeSelectHtmlLen) {
+    snprintf(s_range_select_html + off, kRangeSelectHtmlLen - off, "</select>");
+  }
+}
+
 void refreshPortalParamDefaults() {
   char lat_buf[kCoordParamLen + 1];
   char lon_buf[kCoordParamLen + 1];
@@ -98,6 +124,7 @@ void refreshPortalParamDefaults() {
   snprintf(s_runways_checkbox_attrs, sizeof(s_runways_checkbox_attrs),
            "type=\"checkbox\"%s", ui::radar::showRunways() ? " checked" : "");
   s_param_runways.setValue("T", 2);
+  buildRangeSelectHtml();
 }
 
 void onPortalParamsSaved() {
@@ -107,12 +134,18 @@ void onPortalParamsSaved() {
   }
   ui::radar::saveMilesFromPortal(s_param_miles.getValue());
   ui::radar::saveRunwaysFromPortal(s_param_runways.getValue());
+  // s_param_range is raw custom HTML (no id WiFiManager tracks itself), so
+  // read its submitted value straight off the underlying WebServer.
+  if (s_wm.server) {
+    ui::radar::rangeSetFromPortal(s_wm.server->arg("radar_range").c_str());
+  }
 }
 
 void attachPortalParams(WiFiManager& wm) {
   refreshPortalParamDefaults();
   wm.addParameter(&s_param_lat);
   wm.addParameter(&s_param_lon);
+  wm.addParameter(&s_param_range);
   wm.addParameter(&s_param_miles);
   wm.addParameter(&s_param_runways);
   wm.setSaveParamsCallback(onPortalParamsSaved);
@@ -444,6 +477,15 @@ void wifiLoop() {
     if (s_wm.getWebPortalActive() || s_wm.getConfigPortalActive()) {
       bootButtonPollLongPress();
       s_wm.process();
+      // Keep the portal's fields (esp. range, which can also change via a
+      // BOOT tap while the page is open) fresh without re-rendering on
+      // every single request — cheap, so a coarse 1s throttle is plenty.
+      static unsigned long s_last_refresh_ms = 0;
+      const unsigned long now = millis();
+      if (now - s_last_refresh_ms >= 1000) {
+        s_last_refresh_ms = now;
+        refreshPortalParamDefaults();
+      }
     }
   } else {
     stopLanWebPortal();

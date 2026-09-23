@@ -40,6 +40,9 @@ void rangeInit();
 void rangeNext();
 const RangePreset& rangeCurrent();
 uint8_t rangeIndex();
+/** WiFi portal <select>: index_str is "0".."kRangePresetCount-1"; ignored if
+ *  out of range (e.g. empty submit). */
+void rangeSetFromPortal(const char* index_str);
 /** ADSB fetch radius (km): scaled to screen edge so beyond-ring dots have data. */
 float fetchRadiusKm();
 

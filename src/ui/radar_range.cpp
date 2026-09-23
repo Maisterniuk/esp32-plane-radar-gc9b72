@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace ui::radar {
@@ -81,6 +82,22 @@ void rangeNext() {
 const RangePreset& rangeCurrent() { return kRangePresets[s_range_index]; }
 
 uint8_t rangeIndex() { return s_range_index; }
+
+void rangeSetFromPortal(const char* index_str) {
+  if (index_str == nullptr || index_str[0] == '\0') {
+    return;
+  }
+  char* end = nullptr;
+  const long idx = strtol(index_str, &end, 10);
+  if (end == index_str || idx < 0 ||
+      static_cast<size_t>(idx) >= kRangePresetCount) {
+    return;
+  }
+  s_range_index = static_cast<uint8_t>(idx);
+  saveRangeIndex();
+  Serial.printf("Range preset set to %.0f km (portal)\n",
+                kRangePresets[s_range_index].ring3_km);
+}
 
 float fetchRadiusKm() {
   const float outer_km = rangeCurrent().outer_km;
