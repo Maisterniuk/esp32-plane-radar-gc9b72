@@ -9,6 +9,7 @@
 #include "hardware/display.h"
 #include "services/adsb_client.h"
 #include "services/radar_location.h"
+#include "services/route_lookup.h"
 #include "services/wifi_setup.h"
 #include "ui/radar_display.h"
 #include "ui/radar_range.h"
@@ -112,6 +113,12 @@ void loop() {
     } else if (millis() - g_last_adsb_fetch_ms >= config::kAdsbFetchIntervalMs) {
       g_last_adsb_fetch_ms = millis();
       fetchAndDrawAircraft();
+    }
+    // Self-throttled (~1 request/2s, only for not-yet-cached callsigns) —
+    // cheap to call every tick; fills in origin>destination tags in the
+    // background as new traffic appears.
+    if (g_radar_visible) {
+      services::route::poll();
     }
   }
 

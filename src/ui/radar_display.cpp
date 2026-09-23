@@ -11,6 +11,7 @@
 #include "hardware/display_font.h"
 #include "services/adsb_client.h"
 #include "services/radar_location.h"
+#include "services/route_lookup.h"
 #include "ui/radar_range.h"
 #include "ui/radar_theme.h"
 #include "ui/runway_overlay.h"
@@ -26,6 +27,7 @@ uint16_t kColorAircraft = 0x001F;
 uint16_t kColorTrackVector = 0xFFFF;
 uint16_t kColorTagType = 0x5DFF;
 uint16_t kColorTagAltitude = 0xFFE0;
+uint16_t kColorTagRoute = 0x8410;
 uint16_t kColorRunway = 0x4D5F;
 uint16_t kColorRunwayLabel = 0x7DFF;
 
@@ -191,6 +193,8 @@ void initPalette() {
       tft.color565(radar::kTagTypeR, radar::kTagTypeG, radar::kTagTypeB);
   radar::kColorTagAltitude =
       tft.color565(radar::kTagAltR, radar::kTagAltG, radar::kTagAltB);
+  radar::kColorTagRoute =
+      tft.color565(radar::kTagRouteR, radar::kTagRouteG, radar::kTagRouteB);
   radar::kColorRunway =
       tft.color565(radar::kRunwayR, radar::kRunwayG, radar::kRunwayB);
   radar::kColorRunwayLabel = tft.color565(radar::kRunwayLabelR, radar::kRunwayLabelG,
@@ -381,7 +385,22 @@ void applyTagStyle() {
   }
 }
 
-int measureTagBlockWidth(const services::adsb::Aircraft& plane) {
+/** "AMS>LHR" if a route is cached for this callsign, else empty. Plain ">"
+ *  rather than a Unicode arrow — the embedded VLW font's glyph coverage
+ *  isn't guaranteed to include one. */
+void formatRouteTag(const services::adsb::Aircraft& plane, char* out,
+                    size_t out_len) {
+  out[0] = '\0';
+  char orig[services::route::kAirportCodeLen];
+  char dest[services::route::kAirportCodeLen];
+  if (!services::route::lookup(plane.callsign, orig, dest)) {
+    return;
+  }
+  snprintf(out, out_len, "%s>%s", orig, dest);
+}
+
+int measureTagBlockWidth(const services::adsb::Aircraft& plane,
+                         const char* route_tag) {
   applyTagStyle();
   int max_w = 0;
   if (plane.callsign[0] != '\0') {
@@ -402,6 +421,12 @@ int measureTagBlockWidth(const services::adsb::Aircraft& plane) {
       max_w = w;
     }
   }
+  if (route_tag[0] != '\0') {
+    const int w = s_draw->textWidth(route_tag);
+    if (w > max_w) {
+      max_w = w;
+    }
+  }
   return max_w;
 }
 
@@ -409,9 +434,12 @@ void drawAircraftTag(int x, int y, const services::adsb::Aircraft& plane) {
   initTagLabelMetrics();
   applyTagStyle();
 
+  char route_tag[16];
+  formatRouteTag(plane, route_tag, sizeof(route_tag));
+
   const int line_h = s_draw->fontHeight();
-  const int block_w = measureTagBlockWidth(plane);
-  const int block_h = line_h * 3;
+  const int block_w = measureTagBlockWidth(plane, route_tag);
+  const int block_h = line_h * (route_tag[0] != '\0' ? 4 : 3);
   int ly = y - block_h / 2;
 
   const int symbol_half =
@@ -445,6 +473,12 @@ void drawAircraftTag(int x, int y, const services::adsb::Aircraft& plane) {
   if (plane.alt[0] != '\0') {
     s_draw->setTextColor(radar::kColorTagAltitude, radar::kColorBackground);
     s_draw->drawString(plane.alt, anchor_x, ly);
+  }
+  ly += line_h;
+
+  if (route_tag[0] != '\0') {
+    s_draw->setTextColor(radar::kColorTagRoute, radar::kColorBackground);
+    s_draw->drawString(route_tag, anchor_x, ly);
   }
 }
 
@@ -664,9 +698,12 @@ bool ensureFrameSprite() {
     return true;
   }
   s_frame.setColorDepth(16);
-#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
-  // 360x360x16bpp = ~253 KB — too big to allocate reliably from internal
-  // DRAM alongside the WiFi/TLS stack, so put it in the WROVER's PSRAM.
+#if defined(BOARD_HAS_PSRAM)
+  // At 360x360 the sprite is ~253 KB — too big to allocate reliably from
+  // internal DRAM alongside the WiFi/TLS stack, so put it in PSRAM when
+  // it's available (WROVER). Gated on PSRAM presence, not the display
+  // choice, so a PSRAM-less GC9B72 test build (e.g. plain WROOM) still
+  // falls back to internal DRAM instead of failing setPsram().
   s_frame.setPsram(true);
 #endif
   if (!s_frame.createSprite(radar::kSize, radar::kSize)) {

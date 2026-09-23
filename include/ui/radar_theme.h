@@ -4,7 +4,7 @@
 
 namespace ui::radar {
 
-#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
+#if defined(PLANE_RADAR_DISPLAY_GC9B72)
 
 // All absolute pixel sizes below are the original 240px-canvas values ×1.5
 // (360/240 is an exact 1.5×, so every constant scales cleanly). Physical/
@@ -131,7 +131,7 @@ constexpr int kBeyondRingScreenMarginPx = 2;
 /** Target cap height (px) for aircraft tags (bold, slightly above scale label). */
 constexpr int kAircraftTagLabelHeightPx = 13;
 
-#endif  // PLANE_RADAR_BOARD_WROVER_GC9B72
+#endif  // PLANE_RADAR_DISPLAY_GC9B72
 
 /** RGB565 palette targets (applied in initPalette). */
 constexpr uint8_t kBgR = 4;
@@ -152,6 +152,11 @@ constexpr uint8_t kTagTypeB = 0;
 constexpr uint8_t kTagAltR = 90;
 constexpr uint8_t kTagAltG = 200;
 constexpr uint8_t kTagAltB = 255;
+/** Route line (ORIG>DEST) — dim gray so it reads as secondary info below
+ *  callsign/type/altitude. */
+constexpr uint8_t kTagRouteR = 150;
+constexpr uint8_t kTagRouteG = 150;
+constexpr uint8_t kTagRouteB = 150;
 constexpr uint8_t kRunwayR = 56;
 constexpr uint8_t kRunwayG = 150;
 constexpr uint8_t kRunwayB = 170;
@@ -168,6 +173,7 @@ extern uint16_t kColorAircraft;
 extern uint16_t kColorTrackVector;
 extern uint16_t kColorTagType;
 extern uint16_t kColorTagAltitude;
+extern uint16_t kColorTagRoute;
 extern uint16_t kColorRunway;
 extern uint16_t kColorRunwayLabel;
 
