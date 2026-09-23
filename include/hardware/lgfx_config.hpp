@@ -5,7 +5,7 @@
 
 #include "config.h"
 
-#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
+#if defined(PLANE_RADAR_DISPLAY_GC9B72)
 
 /**
  * LovyanGFX device: GC9B72 (2.1" round, 360x360) on SPI, ESP32-WROVER.
@@ -87,4 +87,4 @@ public:
   }
 };
 
-#endif  // PLANE_RADAR_BOARD_WROVER_GC9B72
+#endif  // PLANE_RADAR_DISPLAY_GC9B72

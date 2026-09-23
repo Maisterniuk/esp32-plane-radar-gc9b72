@@ -18,7 +18,7 @@ const int kCenterX = config::kDisplayWidth / 2;
 const int kCenterY = config::kDisplayHeight / 2;
 
 constexpr int kSpinnerDotCount = 10;
-#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
+#if defined(PLANE_RADAR_DISPLAY_GC9B72)
 // Scaled x1.5 with the rest of the 360px geometry (see ui/radar_theme.h) —
 // keeps the spinner ring inside the round glass instead of clipping at the
 // old 240px-tuned radius.
@@ -38,7 +38,7 @@ struct SpinnerDot {
 
 char s_connecting_ssid[33];
 char s_ssid_line[33];
-#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
+#if defined(PLANE_RADAR_DISPLAY_GC9B72)
 constexpr int kConnectingTextMaxWidthPx = 330;
 #else
 constexpr int kConnectingTextMaxWidthPx = 220;

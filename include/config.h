@@ -23,7 +23,7 @@ constexpr unsigned long kWifiDownGraceMs = 4000;
 /** Minimum interval between background reconnect tries. */
 constexpr unsigned long kWifiReconnectIntervalMs = 15000;
 
-#if defined(PLANE_RADAR_BOARD_WROVER_GC9B72)
+#if defined(PLANE_RADAR_DISPLAY_GC9B72)
 
 // --- BOOT button (ESP32-WROVER dev board, active LOW) ---
 // GPIO0 is the physical "BOOT" pushbutton on virtually every ESP32 dev
@@ -88,7 +88,7 @@ constexpr uint32_t kDisplaySpiWriteHz = 40000000;
 constexpr bool kDisplayInvert = true;
 constexpr bool kDisplayRgbOrder = true;
 
-#endif  // PLANE_RADAR_BOARD_WROVER_GC9B72
+#endif  // PLANE_RADAR_DISPLAY_GC9B72
 
 // --- Radar center defaults (overridden via WiFi setup portal) ---
 constexpr double kDefaultRadarLat = 52.3676;
