@@ -6,6 +6,16 @@
 
 Firmware for an **ESP32-C3 Super Mini** and a **1.28″ round GC9A01** display (240×240). Shows a circular **ADS-B radar** around your configured location, with **WiFiManager** for first-time setup.
 
+> **This fork adds a second hardware target: ESP32-WROVER + a 2.1″ round
+> GC9B72 display (360×360).** Everything below documents the original
+> **`supermini`** (C3 + GC9A01) build; see
+> [**ESP32-WROVER + GC9B72 (360×360) variant**](#esp32-wrover--gc9b72-360×360-variant)
+> below for what's different on the bigger screen. All credit for the core
+> project (this README included) goes to
+> [MatixYo/ESP32-Plane-Radar](https://github.com/MatixYo/ESP32-Plane-Radar) —
+> this fork only adds the alternate display/board support, a live Wi‑Fi
+> settings page for the range preset, and origin→destination tags.
+
 ## What it does
 
 1. **Wi‑Fi setup** (if needed) — captive portal on AP **`PlaneRadar-Setup`**
@@ -202,8 +212,85 @@ git push origin v1.0.0
 
 The release workflow builds firmware in CI and attaches the merged image to the release. Download from **Releases** on GitHub, then flash at **0x0** (ESP32-C3, 4 MB).
 
+## ESP32-WROVER + GC9B72 (360×360) variant
+
+A second PlatformIO target, **`wrover-gc9b72`**, runs the same radar on an
+**ESP32-WROVER** (needs real PSRAM — see below) driving a **2.1″ round
+GC9B72** panel (360×360). Selected via the `PLANE_RADAR_DISPLAY_GC9B72`
+build flag, which swaps in a different pin map, panel driver, and
+360px-scaled UI geometry — the C3/GC9A01 `supermini` target is untouched
+and still builds/works exactly as documented above.
+
+```bash
+pio run -e wrover-gc9b72 -t upload -t monitor
+```
+
+### Why PSRAM is required
+
+The double-buffered frame sprite at 360×360×16bpp is **~253 KB** — too big
+for a plain ESP32's internal DRAM alongside the Wi‑Fi stack. Panel_GC9B72
+itself (LovyanGFX ≥ **1.2.28**, [PR #898](https://github.com/lovyan03/LovyanGFX/pull/898))
+doesn't need PSRAM, but *this project's* double-buffering does. **Use a
+genuine WROVER** (PSRAM populated) — not every board sold as "WROVER" on
+marketplaces actually has it; see `src/test_psram_check.cpp` below. If the
+sprite can't be allocated, the app still runs — it falls back to drawing
+straight to the panel every frame (visible flicker, no crash).
+
+### Wiring (GC9B72 ↔ ESP32-WROVER)
+
+| GC9B72 | WROVER | Notes |
+|--------|--------|-------|
+| VCC | 3V3 | **3.3V only** |
+| GND | GND | |
+| SCL | GPIO **18** | VSPI SCLK |
+| SDA | GPIO **23** | VSPI MOSI |
+| CS | GPIO **5** | |
+| DC | GPIO **27** | |
+| RST | GPIO **33** | |
+| BL | GPIO **32** | GC9B72 needs backlight driven explicitly (unlike most GC9A01 breakouts, which tie BL to VCC) |
+| SDO, TE | — | not connected |
+
+BOOT button: physical **GPIO0** pushbutton already on every ESP32 dev
+board — no extra wiring, same reuse-the-BOOT-button idea as the C3 build.
+
+### Bring-up / diagnostic firmware
+
+Three extra, minimal PlatformIO envs — useful when wiring up a new board,
+independent of the full radar app (no Wi‑Fi credentials needed):
+
+| Env | What it does | Needs PSRAM? |
+|-----|---------------|:---:|
+| `wroom-gc9b72-test` | Fills the screen with test colors/shapes, then cycles red/green/blue/black — checks wiring, backlight, orientation, `kDisplayInvert`/`kDisplayRgbOrder` | No |
+| `psram-check` | Prints `ESP.getPsramSize()` / `psramFound()` once over serial — the ground-truth way to tell a real WROVER from a mislabeled WROOM | No |
+| `radar-sim-gc9b72` / `radar-sim-gc9b72-psram` | Full radar UI (real grid/colors/aircraft rendering) fed fabricated moving traffic instead of a live adsb.fi fetch — no Wi‑Fi. The `-psram` variant enables PSRAM so you can visually confirm smooth, flicker-free double-buffering before wiring up ADS-B | No / Yes |
+
+```bash
+pio run -e wroom-gc9b72-test -t upload -t monitor
+pio run -e psram-check -t upload -t monitor
+pio run -e radar-sim-gc9b72-psram -t upload -t monitor
+```
+
+### Range preset from the Wi‑Fi portal
+
+The same live portal described above (`plane-radar.local`, no Wi‑Fi reset
+needed) now also has a **Default range** dropdown (5/10/15/25 km) —
+previously the range preset could only be changed with BOOT taps on the
+device itself. The portal's fields refresh once a second while the page is
+open, so they stay in sync even if you also cycle the range with BOOT.
+
+### Origin → Destination tags
+
+Aircraft tags can show a 4th line, e.g. `AMS>LHR`, below callsign/type/
+altitude. ADS-B itself carries no flight-plan data, so this comes from a
+free, keyless lookup — [api.adsbdb.com](https://github.com/mrjackwills/adsbdb)
+— by callsign, throttled to roughly one new request every 2 seconds and
+cached for the session (`services/route_lookup.*`). Most scheduled airline
+traffic gets a route; GA/military/charter usually won't (adsbdb has no
+published route for them) — the 4th line just doesn't appear, no error.
+
 ## Dependencies
 
 - [LovyanGFX](https://github.com/lovyan03/LovyanGFX)
 - [WiFiManager](https://github.com/tzapu/WiFiManager)
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson)
+- [adsbdb](https://github.com/mrjackwills/adsbdb) — free callsign→route lookup (WROVER/GC9B72 variant only)
